@@ -1,0 +1,1625 @@
+/* ============================================================================
+   Chord — design system
+
+   Tone: a precision input utility. The visual language borrows from hardware
+   config tools and mechanical keyboards — graphite chassis, tight radii, one
+   hot signal colour used only where something is live or actionable.
+
+   Organised as: tokens → base → primitives → shell → views.
+   ========================================================================= */
+
+:root {
+  /* -- Signal colour ------------------------------------------------------
+     The accent IS the engine state: the user's live colour (green by default)
+     while listening, amber while paused. Overwritten at runtime by
+     applyTheme(); the values here are the listening defaults so the first
+     paint is never wrong. Buttons put near-black ink on the fill — dark ink
+     clears AA on these mid-tone hues where white does not, and it reads as
+     instrumentation rather than webapp. */
+  --brand: #3fb950;
+  --brand-ink: #04160a;
+  --brand-lift: #4ac95c;
+  /* Brand as *text* needs a lighter tint to clear 4.5:1 on our surfaces. */
+  --brand-text: #5ed172;
+  --brand-wash: rgba(63, 185, 80, 0.13);
+  --brand-edge: rgba(63, 185, 80, 0.4);
+  --brand-pulse: rgba(63, 185, 80, 0.5);
+  --brand-pulse-out: rgba(63, 185, 80, 0);
+
+  /* -- Neutrals (graphite) ------------------------------------------------ */
+  --bg: #0d0f12;
+  --sunken: #090a0d;
+  --surface: #15181d;
+  --surface-2: #1c2027;
+  --surface-3: #252a32;
+  --border: #262b33;
+  --border-lift: #363d47;
+
+  /* Contrast on --surface: 12.9 / 7.4 / 4.6 — all clear WCAG AA body text. */
+  --text: #e6e9ee;
+  --text-2: #a8b0bd;
+  --text-3: #808a99;
+  /* Decorative only: dividers, disabled glyphs. Never load-bearing text. */
+  --text-faint: #58616e;
+
+  /* -- Status ------------------------------------------------------------- */
+  --ok: #3fb950;
+  --caution: #d6a533;
+  /* Sits opposite the green/amber accents without going pink or brick, and
+     clears 4.7:1 on --surface. --danger-lift is the hover brightening. */
+  --danger: #f2564d;
+  --danger-lift: #ff6f66;
+  --ok-wash: rgba(63, 185, 80, 0.13);
+  --caution-wash: rgba(214, 165, 51, 0.12);
+  --danger-wash: rgba(242, 86, 77, 0.12);
+  --ok-edge: rgba(63, 185, 80, 0.32);
+  --caution-edge: rgba(214, 165, 51, 0.32);
+  --danger-edge: rgba(242, 86, 77, 0.34);
+
+  /* -- Three type voices --------------------------------------------------
+     Display is reserved for page identity only, so it actually means
+     something when it appears. Text carries every other word in the UI.
+     Mono is for machine truth: keycaps, clock times, latencies, file paths —
+     values the app read off the system rather than prose it wrote. */
+  --font-display: 'Segoe UI Variable Display', 'Segoe UI', system-ui, sans-serif;
+  --font-text: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+
+  /* -- Type scale ---------------------------------------------------------
+     Six steps, no half pixels. Everything in the app picks one of these. */
+  --fs-micro: 11px; /* small labels, counters, timestamps */
+  --fs-meta: 12px; /* timestamps, counters, hints */
+  --fs-ui: 13px; /* default control text */
+  --fs-body: 14px; /* prose */
+  --fs-lead: 16px; /* card headline */
+  --fs-h2: 18px;
+  --fs-h1: 24px;
+
+  /* -- Space scale (4px base) --------------------------------------------- */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 20px;
+  --s6: 24px;
+  --s8: 32px;
+  --s10: 40px;
+  --s12: 48px;
+
+  /* -- Radius -------------------------------------------------------------
+     Two values and one pill, nothing else. Containers, cards, controls and
+     modals all share the container radius; chips and tags step down; only the
+     toggle switch is fully rounded. The -ctl/-card/-modal names are kept so
+     the rules that use them still read by role, but they resolve to one value. */
+  --r-chip: 4px; /* keycaps, badges, swatches */
+  --r-container: 8px; /* cards, rows, wells, buttons, inputs, modals */
+  --r-ctl: var(--r-container);
+  --r-card: var(--r-container);
+  --r-modal: var(--r-container);
+
+  /* -- Elevation ----------------------------------------------------------
+     Only genuinely floating surfaces get a shadow. Cards use a border. */
+  --e-pop: 0 8px 24px -8px rgba(0, 0, 0, 0.6);
+  --e-modal: 0 32px 64px -24px rgba(0, 0, 0, 0.85);
+
+  /* -- Motion -------------------------------------------------------------- */
+  --dur-1: 110ms;
+  --dur-2: 180ms;
+  --ease: cubic-bezier(0.2, 0.8, 0.3, 1);
+
+  --titlebar-h: 40px;
+  --rail-w: 184px;
+
+  color-scheme: dark;
+}
+
+/* ------------------------------------------------------------------ base -- */
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-text);
+  font-size: var(--fs-ui);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  user-select: none;
+}
+
+/* Headings default to Text; only a page title earns the Display face. */
+h1,
+h2,
+h3 {
+  font-family: var(--font-text);
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+code {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  padding: 1px 5px;
+  border-radius: var(--r-chip);
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-lift);
+  border-radius: 99px;
+  border: 4px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-faint);
+  background-clip: content-box;
+}
+
+/* One focus treatment everywhere: a brand ring with breathing room. */
+:focus-visible {
+  outline: 2px solid var(--brand-text);
+  outline-offset: 2px;
+  border-radius: var(--r-ctl);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ------------------------------------------------------------ primitives -- */
+
+/* Buttons — one height (30), one small variant (26), one icon square (30). */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  height: 30px;
+  padding: 0 var(--s3);
+  border: 1px solid var(--border-lift);
+  border-radius: var(--r-ctl);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: var(--fs-ui);
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background var(--dur-1) var(--ease),
+    border-color var(--dur-1) var(--ease),
+    color var(--dur-1) var(--ease);
+}
+.btn:hover:not(:disabled) {
+  background: var(--surface-3);
+  border-color: var(--text-faint);
+}
+.btn:active:not(:disabled) {
+  background: var(--surface-2);
+  transform: translateY(0.5px);
+}
+.btn:disabled {
+  color: var(--text-faint);
+  border-color: var(--border);
+  background: var(--surface);
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  border-color: transparent;
+  background: var(--brand);
+  color: var(--brand-ink);
+  font-weight: 600;
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--brand-lift);
+  border-color: transparent;
+}
+.btn-primary:active:not(:disabled) {
+  background: var(--brand);
+}
+.btn-primary:disabled {
+  background: var(--surface-2);
+  color: var(--text-faint);
+}
+
+.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-2);
+}
+.btn-ghost:hover:not(:disabled) {
+  background: var(--surface-2);
+  border-color: transparent;
+  color: var(--text);
+}
+
+/* Destructive actions read red at rest, not only on hover — the row tools are
+   already hidden until hover, so there is nothing to shout over. Hover fills
+   and outlines softly rather than ringing the icon in full-strength red. */
+.btn-danger {
+  color: var(--danger);
+}
+.btn-danger:hover:not(:disabled) {
+  background: var(--danger-wash);
+  border-color: var(--danger-edge);
+  color: var(--danger-lift);
+}
+.btn-danger:active:not(:disabled) {
+  background: var(--danger-wash);
+}
+
+.btn-sm {
+  height: 26px;
+  padding: 0 var(--s2);
+  font-size: var(--fs-meta);
+}
+
+.btn-icon {
+  width: 30px;
+  padding: 0;
+}
+.btn-icon.btn-sm {
+  width: 26px;
+}
+
+/* Inputs — same 30px control height as buttons, same radius. */
+.input,
+.select,
+.textarea {
+  width: 100%;
+  height: 30px;
+  padding: 0 var(--s3);
+  border: 1px solid var(--border-lift);
+  border-radius: var(--r-ctl);
+  background: var(--sunken);
+  color: var(--text);
+  font-size: var(--fs-ui);
+  user-select: text;
+  transition:
+    border-color var(--dur-1) var(--ease),
+    box-shadow var(--dur-1) var(--ease);
+}
+.input:hover,
+.select:hover,
+.textarea:hover {
+  border-color: var(--text-faint);
+}
+.input:focus,
+.select:focus,
+.textarea:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-wash);
+}
+.input::placeholder,
+.textarea::placeholder {
+  color: var(--text-3);
+}
+
+.textarea {
+  height: auto;
+  min-height: 78px;
+  padding: var(--s2) var(--s3);
+  resize: vertical;
+  font-family: var(--font-mono);
+  font-size: var(--fs-meta);
+  line-height: 1.65;
+}
+
+.select {
+  appearance: none;
+  cursor: pointer;
+  padding-right: var(--s8);
+  background-image: linear-gradient(45deg, transparent 50%, var(--text-3) 50%),
+    linear-gradient(135deg, var(--text-3) 50%, transparent 50%);
+  background-position: calc(100% - 15px) 13px, calc(100% - 11px) 13px;
+  background-size: 4px 4px, 4px 4px;
+  background-repeat: no-repeat;
+}
+.select option {
+  background: var(--surface-2);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+.field-label {
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--text-3);
+}
+.field-hint {
+  font-size: var(--fs-meta);
+  line-height: 1.55;
+  color: var(--text-3);
+  max-width: 68ch;
+}
+
+/* Toggle ---------------------------------------------------------------- */
+
+.toggle {
+  position: relative;
+  flex: none;
+  width: 34px;
+  height: 20px;
+  border: 1px solid var(--border-lift);
+  border-radius: 99px;
+  background: var(--surface-3);
+  cursor: pointer;
+  transition:
+    background var(--dur-2) var(--ease),
+    border-color var(--dur-2) var(--ease);
+}
+.toggle::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--text-3);
+  transition:
+    transform var(--dur-2) var(--ease),
+    background var(--dur-2) var(--ease);
+}
+.toggle:hover {
+  border-color: var(--text-faint);
+}
+.toggle[data-on='true'] {
+  background: var(--brand);
+  border-color: var(--brand);
+}
+.toggle[data-on='true']::after {
+  transform: translateX(14px);
+  background: var(--brand-ink);
+}
+
+/* Keycaps ---------------------------------------------------------------
+   The signature element. Modelled on a real keycap: lighter top face, a
+   dark base edge, one inset highlight. Worth the extra rules. */
+
+/* Every step in a trigger chain is the same chip: same height, padding, radius
+   and type. Width still follows the legend — "A" and "Right Ctrl" cannot be
+   the same width — but long labels are capped so one step never dominates. */
+.keycap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  min-width: 22px;
+  height: 20px;
+  max-width: 150px;
+  padding: 0 6px;
+  border: 1px solid var(--border-lift);
+  border-bottom: 2px solid #0b0d10;
+  border-radius: var(--r-chip);
+  background: var(--surface-3);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.keycap-accent {
+  border-color: var(--brand-edge);
+  /* Derived from the fill rather than a fixed hue, so it tracks the accent. */
+  border-bottom-color: rgba(0, 0, 0, 0.55);
+  background: var(--brand-wash);
+  color: var(--brand-text);
+}
+.keycap-lg {
+  min-width: 32px;
+  height: 30px;
+  padding: 0 var(--s2);
+  font-size: var(--fs-ui);
+}
+
+.chips {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  flex-wrap: wrap;
+}
+/* One connector for every chain, whatever the trigger kind. The kind is
+   already stated by the group heading, so the chain does not need to encode
+   it as well — this keeps every row reading identically. */
+.chip-sep {
+  flex: none;
+  font-size: var(--fs-meta);
+  line-height: 1;
+  color: var(--text-faint);
+}
+
+/* Badges ---------------------------------------------------------------- */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  height: 19px;
+  padding: 0 var(--s2);
+  border-radius: var(--r-chip);
+  background: var(--surface-3);
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+.badge-accent {
+  background: var(--brand-wash);
+  color: var(--brand-text);
+}
+.badge-ok {
+  background: var(--ok-wash);
+  color: var(--ok);
+}
+.badge-warn {
+  background: var(--caution-wash);
+  color: var(--caution);
+}
+.badge-danger {
+  background: var(--danger-wash);
+  color: var(--danger);
+}
+
+/* Notices --------------------------------------------------------------- */
+
+/* Severity is carried by the fill and the icon, not by a coloured rule down
+   one edge. Radius stays on the same scale as every other card. */
+.notice {
+  display: flex;
+  gap: var(--s2);
+  padding: var(--s3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  background: var(--surface);
+  font-size: var(--fs-meta);
+  line-height: 1.55;
+  color: var(--text-2);
+  max-width: 76ch;
+}
+.notice svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--text-3);
+}
+.notice-info {
+  border-color: var(--brand-edge);
+  background: var(--brand-wash);
+}
+.notice-info svg {
+  color: var(--brand-text);
+}
+.notice-caution {
+  border-color: var(--caution-edge);
+  background: var(--caution-wash);
+}
+.notice-caution svg {
+  color: var(--caution);
+}
+.notice-danger {
+  border-color: var(--danger-edge);
+  background: var(--danger-wash);
+}
+.notice-danger svg {
+  color: var(--danger);
+}
+/* For the one notice on a page that is a statement, not fine print. */
+.notice-lead {
+  padding: var(--s4);
+  font-size: var(--fs-body);
+  line-height: 1.6;
+  color: var(--text-2);
+}
+
+/* Skeletons -------------------------------------------------------------- */
+
+.skeleton {
+  border-radius: var(--r-chip);
+  background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 37%, var(--surface-2) 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+@keyframes shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* ----------------------------------------------------------------- shell -- */
+
+.app {
+  display: grid;
+  grid-template-rows: var(--titlebar-h) 1fr;
+  height: 100%;
+  background: var(--bg);
+}
+
+.titlebar {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding-left: var(--s3);
+  border-bottom: 1px solid var(--border);
+  background: var(--sunken);
+  -webkit-app-region: drag;
+}
+.titlebar-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  font-size: var(--fs-ui);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+/* Plain --brand: since the accent itself tracks the engine state, the mark
+   turns green or amber without needing a rule of its own. */
+.titlebar-logo {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--r-chip);
+  background: var(--brand);
+  color: var(--brand-ink);
+  transition: background var(--dur-2) var(--ease);
+}
+.titlebar-spacer {
+  flex: 1;
+}
+.titlebar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  -webkit-app-region: no-drag;
+}
+
+.win-controls {
+  display: flex;
+  margin-left: var(--s2);
+  -webkit-app-region: no-drag;
+}
+.win-btn {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: var(--titlebar-h);
+  border: none;
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: background var(--dur-1), color var(--dur-1);
+}
+.win-btn:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.win-btn:focus-visible {
+  outline-offset: -3px;
+}
+.win-btn-close:hover {
+  background: #c42b1c;
+  color: #fff;
+}
+
+.body {
+  display: grid;
+  grid-template-columns: var(--rail-w) 1fr;
+  min-height: 0;
+}
+
+/* The content column owns the scroll area and the status bar beneath it, so
+   the bar is part of the layout rather than a box floating over content. */
+.content {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-height: 0;
+}
+
+/* Sidebar ----------------------------------------------------------------
+   A labelled sidebar: the app mark sits on top, the three primary
+   destinations below it, and Settings is pinned to the bottom. */
+
+.rail {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  padding: var(--s3) var(--s2);
+  border-right: 1px solid var(--border);
+  background: var(--sunken);
+  min-height: 0;
+}
+
+.rail-logo {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin: 0 0 var(--s3) var(--s2);
+  border-radius: var(--r-chip);
+  background: var(--brand);
+  color: var(--brand-ink);
+  transition: background var(--dur-2) var(--ease);
+}
+
+.rail-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  width: 100%;
+  height: 34px;
+  padding: 0 var(--s3);
+  border: none;
+  border-radius: var(--r-ctl);
+  background: transparent;
+  color: var(--text-3);
+  font-size: var(--fs-ui);
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease), color var(--dur-1) var(--ease);
+}
+.rail-item svg {
+  flex: none;
+}
+.rail-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rail-item:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.rail-item[aria-current='page'] {
+  background: var(--surface-2);
+  color: var(--text);
+  font-weight: 600;
+}
+.rail-item[aria-current='page'] svg {
+  color: var(--brand-text);
+}
+/* The brand reads as a 2px marker on the sidebar edge, not a filled pill. */
+.rail-item[aria-current='page']::before {
+  content: '';
+  position: absolute;
+  left: calc(var(--s2) * -1);
+  width: 2px;
+  height: 18px;
+  border-radius: 0 2px 2px 0;
+  background: var(--brand);
+}
+
+.rail-spacer {
+  flex: 1;
+  min-height: var(--s3);
+}
+
+/* Status bar -------------------------------------------------------------
+   One thin line across the bottom of the content area, replacing the boxed
+   panel that used to float in the sidebar. */
+
+.statusbar {
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+  height: 26px;
+  padding: 0 var(--s6);
+  border-top: 1px solid var(--border);
+  background: var(--sunken);
+  font-size: var(--fs-micro);
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.statusbar-item {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+.statusbar-sep {
+  width: 1px;
+  height: 11px;
+  background: var(--border-lift);
+  flex: none;
+}
+.statusbar-state {
+  color: var(--text-2);
+  font-weight: 600;
+}
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-faint);
+  flex: none;
+}
+.status-dot[data-live='true'] {
+  background: var(--brand);
+  animation: pulse 2.6s ease-out infinite;
+}
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 var(--brand-pulse);
+  }
+  70% {
+    box-shadow: 0 0 0 6px var(--brand-pulse-out);
+  }
+  100% {
+    box-shadow: 0 0 0 0 var(--brand-pulse-out);
+  }
+}
+.status-warn {
+  color: var(--caution);
+}
+/* Main ------------------------------------------------------------------ */
+
+.main {
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Content is a left-aligned column on a fixed measure, not centred in the
+   viewport — it keeps a consistent alignment edge with the sidebar. */
+/* Wider now that the rail gives back ~170px, and because the dense rows are
+   horizontal and use the width. Prose keeps its own measure via the max-width
+   on .page-sub, .setting-desc, .notice and .field-hint, so nothing runs long. */
+.page {
+  max-width: 1040px;
+  padding: 0 var(--s6) var(--s8);
+  animation: rise var(--dur-2) var(--ease);
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+/* Top bar: title and subtitle on the left, actions flush right. The page has
+   no top padding of its own, so the bar's own padding is the only gap above
+   the title. It spans the full content width, not the text measure. */
+.page-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+  /* Cancel the page's horizontal padding so the rule runs edge to edge. */
+  margin: 0 calc(var(--s6) * -1) var(--s4);
+  padding: var(--s3) var(--s6);
+  border-bottom: 1px solid var(--border);
+}
+/* The one place the Display face is used, at a weight nothing else reaches. */
+.page-title {
+  font-family: var(--font-display);
+  font-size: var(--fs-h1);
+  font-weight: 700;
+  letter-spacing: -0.021em;
+}
+.page-sub {
+  margin-top: var(--s1);
+  font-size: var(--fs-body);
+  line-height: 1.55;
+  color: var(--text-3);
+  max-width: 62ch;
+}
+.page-head-actions {
+  margin-left: auto;
+  display: flex;
+  gap: var(--s2);
+  align-items: center;
+  flex: none;
+}
+
+.section {
+  margin-bottom: var(--s8);
+}
+.section:last-child {
+  margin-bottom: 0;
+}
+.section-title {
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--text-3);
+  margin-bottom: var(--s3);
+}
+
+.card {
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  background: var(--surface);
+  overflow: hidden;
+}
+.card-pad {
+  padding: var(--s4);
+}
+
+/* Search field with a leading icon, without inline positioning hacks. */
+.search {
+  position: relative;
+  width: 190px;
+}
+.search svg {
+  position: absolute;
+  left: var(--s2);
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-3);
+  pointer-events: none;
+}
+.search .input {
+  height: 26px;
+  padding-left: 26px;
+  font-size: var(--fs-meta);
+}
+
+/* ------------------------------------------------------- shortcut list --- */
+
+/* Shortcuts are grouped by trigger kind; the group label carries the kind, so
+   the rows no longer repeat it as a per-row badge. */
+.sc-group {
+  margin-bottom: var(--s4);
+}
+.sc-group:last-child {
+  margin-bottom: 0;
+}
+.sc-group-label {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+  margin-bottom: var(--s2);
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--text-3);
+}
+.sc-group-count {
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.sc-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+}
+
+/* One dense row: toggle | name | trigger chain and action | metrics | tools.
+   Name and chain sit side by side instead of stacking, which roughly halves
+   the row height and fits far more on screen. */
+.sc {
+  display: grid;
+  grid-template-columns: auto minmax(90px, 0.85fr) minmax(0, 1.6fr) auto auto;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  background: var(--surface);
+  transition:
+    border-color var(--dur-1) var(--ease),
+    background var(--dur-1) var(--ease);
+}
+.sc:hover {
+  border-color: var(--border-lift);
+  background: var(--surface-2);
+}
+.sc:focus-within {
+  border-color: var(--brand-edge);
+}
+.sc[data-off='true'] .sc-name,
+.sc[data-off='true'] .sc-flow,
+.sc[data-off='true'] .sc-metrics {
+  opacity: 0.45;
+}
+.sc[data-fired='true'] {
+  animation: fired 800ms var(--ease);
+}
+@keyframes fired {
+  0% {
+    border-color: var(--brand);
+    background: var(--brand-wash);
+  }
+}
+.sc-name {
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+  font-size: var(--fs-body);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Marks a row as present in the tray menu, visible without hovering. */
+.sc-pin {
+  flex: none;
+  color: var(--brand-text);
+}
+/* The pin tool stays lit while the shortcut is pinned. */
+.sc-tools .btn[aria-pressed='true'] {
+  color: var(--brand-text);
+}
+/* Single line: the chain must not wrap, or rows lose their uniform height. */
+.sc-flow {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-width: 0;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+.sc-arrow {
+  display: flex;
+  color: var(--text-faint);
+}
+.sc-action {
+  font-size: var(--fs-meta);
+  color: var(--text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Count and timestamp sit side by side on the same line as everything else. */
+.sc-metrics {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: var(--s2);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.sc-count {
+  font-size: var(--fs-meta);
+  font-weight: 600;
+  color: var(--text-2);
+  min-width: 26px;
+  text-align: right;
+}
+.sc-when {
+  font-size: var(--fs-micro);
+  color: var(--text-3);
+  min-width: 52px;
+  text-align: right;
+}
+.sc-tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity var(--dur-1) var(--ease);
+}
+.sc:hover .sc-tools,
+.sc:focus-within .sc-tools {
+  opacity: 1;
+}
+
+/* Empty states — left aligned with a real measure, never a centred blob. */
+.empty {
+  max-width: 620px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s3);
+  padding: var(--s8);
+  border: 1px dashed var(--border-lift);
+  border-radius: var(--r-card);
+  background: var(--surface);
+}
+/* The icon sits on the headline's baseline at the headline's size — it labels
+   the state, it does not become the state. No decorative container. */
+.empty-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+.empty-head svg {
+  flex: none;
+  color: var(--text-3);
+}
+.empty-title {
+  font-size: var(--fs-lead);
+  font-weight: 600;
+  color: var(--text);
+}
+.empty-text {
+  font-size: var(--fs-body);
+  line-height: 1.6;
+  color: var(--text-3);
+  max-width: 58ch;
+}
+.empty-inline {
+  border: none;
+  padding: var(--s10) var(--s4);
+  align-items: center;
+  text-align: center;
+  color: var(--text-3);
+  font-size: var(--fs-body);
+}
+
+/* ----------------------------------------------------------------- modal -- */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: var(--s6);
+  background: rgba(6, 7, 9, 0.7);
+  animation: fade var(--dur-1) var(--ease);
+}
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+.modal {
+  width: min(720px, 100%);
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-lift);
+  border-radius: var(--r-modal);
+  background: var(--bg);
+  box-shadow: var(--e-modal);
+  overflow: hidden;
+  animation: pop var(--dur-2) var(--ease);
+}
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.99);
+  }
+}
+/* The dialog takes focus on open so keyboard users land inside it, but it is a
+   container, not a control — it must not paint the focus ring. */
+.modal:focus,
+.modal:focus-visible {
+  outline: none;
+}
+
+.modal-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s4);
+  border-bottom: 1px solid var(--border);
+}
+.modal-title {
+  font-size: var(--fs-lead);
+  font-weight: 600;
+}
+.modal-body {
+  padding: var(--s5);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s8);
+}
+.modal-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s3) var(--s4);
+  border-top: 1px solid var(--border);
+  background: var(--sunken);
+}
+.modal-foot .spacer {
+  flex: 1;
+}
+
+/* A numbered step header: the ordinal is a real element, not "1 —" in text. */
+.step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+.step-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+.step-num {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--r-chip);
+  background: var(--surface-3);
+  color: var(--text-2);
+  font-size: var(--fs-micro);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.step-title {
+  font-size: var(--fs-ui);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.step-done .step-num {
+  background: var(--brand);
+  color: var(--brand-ink);
+}
+
+/* Tabs ------------------------------------------------------------------ */
+
+.tabs {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-ctl);
+  background: var(--sunken);
+}
+.tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  height: 28px;
+  border: none;
+  border-radius: var(--r-chip);
+  background: transparent;
+  color: var(--text-3);
+  font-size: var(--fs-meta);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease), color var(--dur-1) var(--ease);
+}
+.tab:hover {
+  color: var(--text);
+  background: var(--surface-2);
+}
+.tab[aria-selected='true'] {
+  background: var(--surface-3);
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* Capture stage ---------------------------------------------------------
+   The one place centring is right: it is a target you aim input at. */
+
+.capture {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s3);
+  min-height: 132px;
+  padding: var(--s4) var(--s5);
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  background: var(--sunken);
+  text-align: center;
+  transition: border-color var(--dur-2) var(--ease), background var(--dur-2) var(--ease);
+}
+.capture[data-live='true'] {
+  border-color: var(--brand);
+  background: var(--brand-wash);
+}
+.capture[data-live='true']::after {
+  content: '';
+  position: absolute;
+  inset: 5px;
+  border: 1px dashed var(--brand-edge);
+  border-radius: var(--r-ctl);
+  pointer-events: none;
+  animation: breathe 2.2s ease-in-out infinite;
+}
+@keyframes breathe {
+  50% {
+    opacity: 0.35;
+  }
+}
+.capture-hint {
+  font-size: var(--fs-meta);
+  line-height: 1.55;
+  color: var(--text-3);
+  max-width: 46ch;
+}
+.capture-live {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  min-height: 30px;
+  flex-wrap: wrap;
+}
+.capture-empty {
+  font-size: var(--fs-meta);
+  color: var(--text-3);
+  font-family: var(--font-mono);
+}
+.gesture-path {
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+  padding: var(--s1) var(--s2);
+  border: 1px solid var(--brand-edge);
+  border-radius: var(--r-chip);
+  color: var(--brand-text);
+}
+
+/* Action picker --------------------------------------------------------- */
+
+/* Reflows on its own container width. A viewport media query would be dead
+   code here: the window cannot go below 940px, so it would never fire. */
+.action-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--s2);
+}
+.action-opt {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  height: 38px;
+  padding: 0 var(--s3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-ctl);
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: var(--fs-meta);
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--dur-1) var(--ease),
+    background var(--dur-1) var(--ease),
+    color var(--dur-1) var(--ease);
+}
+.action-opt svg {
+  flex: none;
+  color: var(--text-3);
+  transition: color var(--dur-1) var(--ease);
+}
+.action-opt span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.action-opt:hover {
+  border-color: var(--border-lift);
+  background: var(--surface-2);
+  color: var(--text);
+}
+.action-opt:hover svg {
+  color: var(--text-2);
+}
+.action-opt[aria-pressed='true'] {
+  border-color: var(--brand);
+  background: var(--brand-wash);
+  color: var(--text);
+  font-weight: 600;
+}
+.action-opt[aria-pressed='true'] svg {
+  color: var(--brand-text);
+}
+
+/* --------------------------------------------------------------- monitor -- */
+
+.held-stage {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  flex-wrap: wrap;
+  min-height: 60px;
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  background: var(--sunken);
+}
+.held-empty {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  color: var(--text-3);
+  font-size: var(--fs-meta);
+  font-family: var(--font-mono);
+}
+
+.stream {
+  display: flex;
+  flex-direction: column;
+  max-height: 380px;
+  overflow-y: auto;
+}
+.stream-row {
+  display: grid;
+  grid-template-columns: 64px 76px auto 1fr;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s1) var(--s4);
+  font-size: var(--fs-meta);
+  animation: slide var(--dur-2) var(--ease);
+}
+.stream-row:hover {
+  background: var(--surface-2);
+}
+@keyframes slide {
+  from {
+    opacity: 0;
+    transform: translateX(-4px);
+  }
+}
+.stream-time,
+.stream-kind {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-3);
+  font-size: var(--fs-micro);
+}
+.stream-kind {
+  letter-spacing: 0.01em;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--s2);
+}
+.stat {
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  background: var(--surface);
+}
+.stat-value {
+  font-size: var(--fs-h2);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+.stat-label {
+  margin-top: 2px;
+  font-size: var(--fs-micro);
+  letter-spacing: 0.01em;
+  color: var(--text-3);
+}
+
+/* -------------------------------------------------------------- activity -- */
+
+.log-row {
+  display: grid;
+  grid-template-columns: auto 64px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s3) var(--s4);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--fs-ui);
+  animation: slide var(--dur-2) var(--ease);
+}
+.log-row:last-child {
+  border-bottom: none;
+}
+.log-time {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-3);
+  font-size: var(--fs-micro);
+}
+.log-name {
+  font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.log-detail {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  color: var(--text-3);
+  font-size: var(--fs-meta);
+  white-space: nowrap;
+}
+.log-latency {
+  font-variant-numeric: tabular-nums;
+  min-width: 46px;
+  text-align: right;
+  color: var(--text-3);
+}
+
+/* -------------------------------------------------------------- settings -- */
+
+.setting {
+  display: flex;
+  align-items: center;
+  gap: var(--s5);
+  padding: var(--s3) var(--s4);
+  border-bottom: 1px solid var(--border);
+}
+.setting:last-child {
+  border-bottom: none;
+}
+.setting-text {
+  flex: 1;
+  min-width: 0;
+}
+.setting-name {
+  font-size: var(--fs-ui);
+  font-weight: 500;
+}
+.setting-desc {
+  margin-top: 2px;
+  font-size: var(--fs-meta);
+  line-height: 1.55;
+  color: var(--text-3);
+  max-width: 64ch;
+}
+.setting-control {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+.num-input {
+  width: 76px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.unit {
+  font-size: var(--fs-meta);
+  color: var(--text-3);
+  min-width: 18px;
+}
+
+.swatches {
+  display: flex;
+  gap: var(--s2);
+}
+.swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--r-chip);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+  /* Hover shifts the ring, like every other control — no lift, no scale. */
+  transition: box-shadow var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease);
+}
+.swatch:hover {
+  border-color: rgba(255, 255, 255, 0.5);
+}
+.swatch[aria-pressed='true'] {
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--text-2);
+}
+
+.mono-path {
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+  color: var(--text-3);
+  user-select: text;
+  word-break: break-all;
+  line-height: 1.6;
+}
+
+/* ----------------------------------------------------------------- toast -- */
+
+.toasts {
+  position: fixed;
+  right: var(--s4);
+  bottom: var(--s4);
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+/* Same rule as .notice: outcome reads from the icon, not an edge stripe. A
+   toast is genuinely floating, so this is where elevation is warranted. */
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s2);
+  padding: var(--s3);
+  border: 1px solid var(--border-lift);
+  border-radius: var(--r-card);
+  background: var(--surface-2);
+  box-shadow: var(--e-pop);
+  font-size: var(--fs-meta);
+  line-height: 1.5;
+  cursor: pointer;
+  max-width: 360px;
+  animation: toastin var(--dur-2) var(--ease);
+}
+.toast svg {
+  flex: none;
+  margin-top: 1px;
+}
+@keyframes toastin {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+}
+.toast-ok {
+  border-color: var(--ok-edge);
+}
+.toast-ok svg {
+  color: var(--ok);
+}
+.toast-err {
+  border-color: var(--danger-edge);
+  background: var(--danger-wash);
+}
+.toast-err svg {
+  color: var(--danger);
+}
+
+/* --------------------------------------------------------------- helpers -- */
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+.col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+.grow {
+  flex: 1;
+}
+.muted {
+  color: var(--text-3);
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

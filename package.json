@@ -1,0 +1,38 @@
+{
+  "name": "chord",
+  "version": "0.1.0",
+  "description": "Global mouse & keyboard shortcut engine for Windows",
+  "main": "dist-electron/main.js",
+  "author": "greni",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "icons": "node scripts/make-icons.mjs",
+    "build": "npm run typecheck && vite build",
+    "pack": "npm run build && electron-builder --win --dir",
+    "dist": "npm run build && electron-builder --win",
+    "test": "node scripts/build-tests.mjs && node --test tests/matcher.test.mjs"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9",
+    "uiohook-napi": "^1.5.5"
+  },
+  "devDependencies": {
+    "@types/node": "^26.4.1",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.5",
+    "@vitejs/plugin-react": "^6.1.1",
+    "electron": "^44.1.1",
+    "electron-builder": "^26.15.3",
+    "lucide-react": "^1.39.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.2",
+    "vite-plugin-electron": "^1.1.2",
+    "vite-plugin-electron-renderer": "^1.0.0",
+    "zustand": "^5.0.15"
+  }
+}

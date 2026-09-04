@@ -1,0 +1,136 @@
+name: Release
+
+# Tags only. There is deliberately no `branches:` key here: a push to main must
+# never build or publish anything. A release happens when you tag one.
+on:
+  push:
+    tags:
+      - 'v*'
+
+# electron-builder creates the GitHub Release and uploads the installer to it,
+# which the default read-only token cannot do.
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # The tag is only a label; electron-updater compares package.json's
+      # `version` against the version in latest.yml. If the two disagree the
+      # Release ends up named for the wrong build and installed clients see
+      # nothing, so fail loudly here rather than publishing a dud.
+      - name: Verify tag matches package.json version
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $tag = '${{ github.ref_name }}'
+          if ($tag -ne "v$version") {
+            Write-Error "Tag $tag does not match package.json version $version (expected v$version). Bump the version field in package.json before tagging."
+            exit 1
+          }
+          Write-Host "Tag $tag matches package.json version $version."
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Regenerated rather than trusted from the repo so the tray/window icon
+      # set always matches scripts/make-icons.mjs -- electron-builder globs
+      # build/tray-*.png and build/icon-*.png, so a stale committed set would
+      # ship silently.
+      - name: Generate icons
+        run: npm run icons
+
+      # electron-builder uploads each artifact from its own publish task, and
+      # every task independently calls "get or create release": list the
+      # releases, find none carrying this tag, create one. On a fresh tag they
+      # all run that at once, and the GitHub API does not enforce one release
+      # per tag -- so v0.1.0 was published as *two* releases, one holding the
+      # installers and latest.yml, the other holding only the blockmap, with
+      # /releases/latest resolving to the empty one. That silently breaks both
+      # the README download link and every client's update check.
+      #
+      # Creating the release before the build removes the race: each publish
+      # task now finds this one and uploads into it, because
+      # gitHubPublisher.js returns an existing non-draft release as long as it
+      # was published within the last two hours -- which a release created
+      # seconds earlier in the same job always is. (That reuse also depends on
+      # `releaseType: release`; under the default `draft` it would refuse the
+      # existing release instead.)
+      #
+      # Guarded so re-running a failed job reuses the release rather than
+      # failing on "already exists".
+      - name: Create the release up front
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = '${{ github.ref_name }}'
+          gh release view $tag --json tagName | Out-Null
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "Release $tag already exists; the build will upload into it."
+          } else {
+            Write-Host "Creating release $tag."
+            gh release create $tag --verify-tag --title $tag --generate-notes
+            if ($LASTEXITCODE -ne 0) { Write-Error "Could not create release $tag."; exit 1 }
+          }
+
+      # `npm run dist` is typecheck -> vite build -> electron-builder --win.
+      # --publish always is explicit rather than relying on electron-builder's
+      # onTagOrDraft default. Uploads Chord-Setup-<version>.exe, the portable
+      # exe, the blockmap and the latest.yml manifest the updater reads.
+      - name: Build and publish
+        run: npm run dist -- --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # The failure this job exists to prevent is silent: a green build that
+      # published a release the updater cannot read. Assert the shape of what
+      # actually landed rather than trusting the exit code.
+      - name: Verify the published release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = '${{ github.ref_name }}'
+          $version = $tag.TrimStart('v')
+
+          # Filtered in PowerShell rather than with `gh --jq`: a jq expression
+          # needs quotes around the tag, and nesting those inside a pwsh
+          # double-quoted string reliably mangles them.
+          $releases = gh api "repos/${{ github.repository }}/releases" | ConvertFrom-Json
+          $matching = @($releases | Where-Object { $_.tag_name -eq $tag })
+          if ($matching.Count -ne 1) {
+            Write-Error "Expected exactly 1 release tagged $tag, found $($matching.Count). Duplicate releases split the assets between them, and /releases/latest -- the endpoint both the updater and the README link resolve -- may point at the wrong one."
+            exit 1
+          }
+
+          $assets = @($matching[0].assets | ForEach-Object { $_.name })
+          Write-Host "Assets on ${tag}: $($assets -join ', ')"
+          foreach ($required in @('latest.yml', "Chord-Setup-$version.exe")) {
+            if ($assets -notcontains $required) {
+              Write-Error "Release $tag is missing $required - installed clients cannot update from it."
+              exit 1
+            }
+          }
+
+          # The manifest is what actually drives updates, and the version it
+          # names is the only thing compared against an installed build. A
+          # manifest naming the wrong version is a release nobody receives.
+          gh release download $tag --pattern latest.yml --output published-latest.yml --clobber
+          $named = (Select-String -Path published-latest.yml -Pattern '^version:\s*(.+)$').Matches[0].Groups[1].Value.Trim()
+          if ($named -ne $version) {
+            Write-Error "latest.yml on $tag names version '$named' but this build is '$version'."
+            exit 1
+          }
+          Remove-Item published-latest.yml
+
+          Write-Host "Release $tag is correct: one release, installer present, latest.yml names $named."

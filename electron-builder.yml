@@ -1,0 +1,129 @@
+appId: com.greni.chord
+productName: Chord
+# Named holder, matching LICENSE. This string lands in the exe's Windows file
+# properties, where a bare "Copyright (c) 2026" reads as unattributed.
+copyright: Copyright (c) 2026 Vansh
+
+directories:
+  output: release
+  buildResources: build
+
+# Chromium ships ~55 translations of its own UI as separate .pak files, adding
+# up to more than ten times the size of the app itself. Chord's interface is
+# English-only, and these translate Chromium's built-in surfaces (print dialog,
+# context menus, error pages) rather than anything we wrote -- so every file
+# but one is paying freight for strings no user of this build will ever see.
+# electron-builder deletes the rest during pack (ElectronFramework.js applies
+# this on Windows too, against resources/../locales).
+electronLanguages:
+  - en-US
+
+# LZMA at its highest setting. It costs a few minutes of CI time per release,
+# which is the cheapest currency available here: the build runs on a schedule
+# nobody waits on, while the download is paid again by every user, on every
+# update, forever.
+compression: maximum
+
+# Strips Electron payload this app cannot reach. See the script for what is
+# removed and -- more importantly -- what is deliberately left alone.
+afterPack: scripts/trim-electron.mjs
+
+# Only the built output ships; sources and node_modules dev deps stay out.
+files:
+  - dist/**
+  - dist-electron/**
+  - package.json
+  - '!**/*.map'
+
+  # uiohook-napi is a production dependency, so electron-builder copies the
+  # whole published package -- which carries far more than the one binary the
+  # app loads. node-gyp-build resolves build/Release first and only falls back
+  # to prebuilds/ (node-gyp-build.js: getFirst on build/Release, then
+  # resolve()), and @electron/rebuild compiles build/Release/uiohook_napi.node
+  # against our Electron during every pack. So that file is what actually runs
+  # and the rest is shipped-and-never-opened:
+  #   - the C sources the binary was already compiled from
+  #   - MSVC leftovers: .lib/.exp/.iobj/.ipdb link artefacts, obj/ with its
+  #     .tlog build logs, and the .vcxproj files
+  #   - prebuilt binaries for macOS, Linux and Windows-on-ARM
+  # win32-x64 is kept as a fallback in case a future electron-builder skips
+  # the rebuild; it is small, and losing the hook would break the whole app.
+  - '!**/node_modules/uiohook-napi/src/**'
+  - '!**/node_modules/uiohook-napi/libuiohook/**'
+  - '!**/node_modules/uiohook-napi/build/Release/obj/**'
+  - '!**/node_modules/uiohook-napi/build/Release/*.{lib,exp,iobj,ipdb,pdb}'
+  - '!**/node_modules/uiohook-napi/build/*.{vcxproj,filters}'
+  - '!**/node_modules/uiohook-napi/prebuilds/!(win32-x64)/**'
+
+asar: true
+# The native hook cannot be executed from inside the asar archive.
+asarUnpack:
+  - '**/node_modules/uiohook-napi/**'
+
+# Runtime files the app reads by path rather than importing.
+extraResources:
+  - from: resources/synth.ps1
+    to: synth.ps1
+  - from: build/icon.png
+    to: icon.png
+  # scripts/make-icons.mjs emits one tray/window pair per accent, keyed by the
+  # colour's hex (tray-3fb950.png, tray-3fb950@2x.png, icon-e8892b.png, ...).
+  # main.ts builds the filename from the accent at runtime, so the whole set
+  # has to ship rather than a fixed live/paused pair. Globbing keeps this in
+  # step automatically when an accent is added to or removed from that script.
+  - from: build
+    to: .
+    filter:
+      - tray-*.png
+      - icon-*.png
+
+# Auto-update feed. electron-builder writes a latest.yml manifest beside the
+# installer and uploads both to the GitHub Release; electron-updater in the app
+# fetches that manifest and compares the version it names against the running
+# build's own version.
+#
+# IMPORTANT: "version" in package.json is the only thing that comparison looks
+# at. Every release must bump it. A Release whose latest.yml carries a version
+# an installed client already has is invisible to that client, no matter how
+# new the binary actually is -- and the tag name has no bearing on it either.
+publish:
+  provider: github
+  owner: Vansh-kap-98
+  # Must match the GitHub repository name exactly. GitHub 301-redirects the old
+  # name after a rename, but the updater should not be leaning on a redirect to
+  # find releases -- point it straight at the current name.
+  repo: chord
+  # electron-builder defaults this to `draft`. A draft Release is invisible to
+  # everyone but the repo owner: it is absent from /releases.atom and from
+  # /releases/latest, which are exactly the two endpoints electron-updater
+  # reads, and its assets have no public download URL. So the default would
+  # both hide every update from installed clients and break the installer link
+  # you hand to other people, until someone pressed "Publish release" by hand.
+  # Publishing straight away is what makes the pipeline continuous.
+  releaseType: release
+
+# TODO (follow-up, deliberately not done in this pass): code signing. Unsigned
+# builds trip SmartScreen on download, and AV heuristics score the global
+# keyboard hook in uiohook-napi as keylogger-shaped. Signing also matters for
+# auto-update specifically: an unsigned update can be blocked partway through
+# the swap, which is a worse failure than never updating. Needs an OV/EV cert
+# plus `certificateFile` / CSC_KEY_PASSWORD wired through the release workflow.
+win:
+  icon: build/icon.ico
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Chord
+  artifactName: Chord-Setup-${version}.${ext}
+
+portable:
+  artifactName: Chord-Portable-${version}.${ext}
