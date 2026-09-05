@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { ICON } from '../icons';
 import { useApp, type Page } from '../state';
+import { ChordMark } from './ChordMark';
 
 /** Settings is rendered separately, pinned to the bottom of the rail. */
 const NAV: Array<{ id: Page; label: string; icon: typeof Zap }> = [
@@ -90,9 +91,14 @@ function RailItem({ id, label, icon: Icon }: { id: Page; label: string; icon: ty
 export function Rail() {
   return (
     <nav className="rail" aria-label="Sections">
-      <span className="rail-logo" aria-hidden="true">
-        <Zap size={13} fill="currentColor" strokeWidth={0} />
-      </span>
+      <div className="rail-brand">
+        <span className="rail-logo" aria-hidden="true">
+          <ChordMark size={40} />
+        </span>
+        {/* Written in sentence case and uppercased in CSS, so a screen reader
+            says "Chord" rather than spelling it out. */}
+        <span className="rail-wordmark">Chord</span>
+      </div>
       {NAV.map((item) => (
         <RailItem key={item.id} {...item} />
       ))}

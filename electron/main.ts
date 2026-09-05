@@ -52,8 +52,9 @@ let win: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
 let nextLogId = 1;
-/** Accent hex (without '#') the tray and window icons currently show. */
-let paintedIconState: string | null = null;
+/** Accent hex (without '#') each icon surface currently shows, tracked apart. */
+let paintedTrayState: string | null = null;
+let paintedWindowState: string | null = null;
 
 const store = new Store();
 const synth = new Synth(resourcePath('synth.ps1'));
@@ -156,36 +157,58 @@ async function onShortcutFired(shortcut: Shortcut): Promise<void> {
 const PAUSED_HEX = 'e8892b';
 const DEFAULT_HEX = '3fb950';
 
-function applyStateIcons(): void {
-  // Icon files are named by accent hex, so the key comes straight from the
-  // setting. Paused always wins, whatever colour the user picked for live.
-  const key = hook.status.running
+/** Accent hex the icons should currently show. Paused always wins. */
+function iconKey(): string {
+  return hook.status.running
     ? (store.settings.accent || '').replace('#', '').toLowerCase() || DEFAULT_HEX
     : PAUSED_HEX;
+}
 
-  // Repainting on every status push would rebuild two images a second.
-  if (key === paintedIconState) return;
-  // Only record the state once something was actually painted, so an early
-  // status event that arrives before the tray exists does not skip the paint.
-  if (!tray) return;
+function trayIconFor(key: string): Electron.NativeImage {
+  return nativeImage.createFromPath(assetPath(`tray-${key}.png`));
+}
 
-  // Resolve with at most one fallback and never by recursing: `key` is fixed
-  // for the paused state, so retrying after a miss would loop forever. A
-  // missing icon file must also never rewrite the user's chosen accent.
-  let trayImage = nativeImage.createFromPath(assetPath(`tray-${key}.png`));
-  let windowImage = nativeImage.createFromPath(assetPath(`icon-${key}.png`));
-  if (trayImage.isEmpty() && key !== DEFAULT_HEX) {
-    trayImage = nativeImage.createFromPath(assetPath(`tray-${DEFAULT_HEX}.png`));
-    windowImage = nativeImage.createFromPath(assetPath(`icon-${DEFAULT_HEX}.png`));
+/**
+ * Window and taskbar icon for an accent.
+ *
+ * Prefers the multi-size .ico. Windows asks for 16 or 24px to draw the taskbar
+ * button and the Alt-Tab entry, and handing it a lone 256px bitmap makes it
+ * downscale a line-drawn mark into mush; an .ico lets it pick the simplified
+ * small frames make-icons.mjs draws for exactly those slots. The PNG stays as
+ * a fallback so an older build's asset set still works.
+ */
+function windowIconFor(key: string): Electron.NativeImage {
+  const ico = nativeImage.createFromPath(assetPath(`icon-${key}.ico`));
+  return ico.isEmpty() ? nativeImage.createFromPath(assetPath(`icon-${key}.png`)) : ico;
+}
+
+function applyStateIcons(): void {
+  const key = iconKey();
+
+  // The tray and the window are tracked separately on purpose. A single flag
+  // could not distinguish "painted both" from "painted the tray, but there was
+  // no window yet" -- and recording success for both is what left the taskbar
+  // stuck: once the flag matched, the early return blocked the window from
+  // ever catching up. A window recreated after being closed (which happens
+  // whenever "close button hides to tray" is off) is born with the default
+  // icon, so that path could never show the accent or the paused colour.
+  if (tray && key !== paintedTrayState) {
+    // At most one fallback and never by recursing: `key` is fixed for the
+    // paused state, so retrying after a miss would loop forever.
+    let image = trayIconFor(key);
+    if (image.isEmpty() && key !== DEFAULT_HEX) image = trayIconFor(DEFAULT_HEX);
+    if (!image.isEmpty()) tray.setImage(image);
+    // Recorded even when nothing resolved: a missing file will not appear
+    // later, and retrying would rebuild an image every status tick.
+    paintedTrayState = key;
   }
-  // Nothing usable on disk: keep whatever is showing rather than clearing it.
-  if (trayImage.isEmpty()) return;
 
-  // Record the requested key, not the one that resolved, so a miss does not
-  // retry on every status tick.
-  paintedIconState = key;
-  tray.setImage(trayImage);
-  if (win && !win.isDestroyed() && !windowImage.isEmpty()) win.setIcon(windowImage);
+  if (win && !win.isDestroyed() && key !== paintedWindowState) {
+    let image = windowIconFor(key);
+    if (image.isEmpty() && key !== DEFAULT_HEX) image = windowIconFor(DEFAULT_HEX);
+    if (!image.isEmpty()) win.setIcon(image);
+    paintedWindowState = key;
+  }
 }
 
 function applyEngineState(): void {
@@ -209,6 +232,12 @@ function applyAutoStart(settings: Settings): void {
 // ------------------------------------------------------------------ window
 
 function createWindow(showImmediately: boolean): void {
+  // A fresh window carries none of our paint, whatever the previous one wore.
+  // Nothing else would notice: the status ticker pushes straight to the
+  // renderer without going through applyStateIcons, so a window recreated
+  // mid-session could otherwise sit on the wrong icon indefinitely.
+  paintedWindowState = null;
+
   win = new BrowserWindow({
     width: 1120,
     height: 760,
@@ -217,7 +246,9 @@ function createWindow(showImmediately: boolean): void {
     show: false,
     frame: false,
     backgroundColor: '#0b0d14',
-    icon: assetPath('icon.png'),
+    // Born wearing the current state rather than the default green, so the
+    // taskbar button is never briefly the wrong colour.
+    icon: windowIconFor(iconKey()),
     webPreferences: {
       preload: path.join(DIR, 'preload.js'),
       contextIsolation: true,
@@ -248,6 +279,11 @@ function createWindow(showImmediately: boolean): void {
 
   if (DEV_URL) void win.loadURL(DEV_URL);
   else void win.loadFile(path.join(ROOT, 'dist', 'index.html'));
+
+  // Paint explicitly rather than waiting for the next status event: those only
+  // fire when the engine or the settings actually change, which may be a long
+  // time after a window is reopened from the tray.
+  applyStateIcons();
 }
 
 function showWindow(): void {

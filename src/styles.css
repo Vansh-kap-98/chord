@@ -64,6 +64,14 @@
   --font-display: 'Segoe UI Variable Display', 'Segoe UI', system-ui, sans-serif;
   --font-text: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
   --font-mono: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  /* Brand voice, used only by the wordmark beside the mark. Bahnschrift is
+     Windows' DIN 1451 face — the lettering of instrument panels and machine
+     plates, which is the register this app is dressed in. It has shipped with
+     Windows since 10 1709; the fallbacks matter because the CSP in index.html
+     allows no remote font, so anything not already on the machine cannot be
+     fetched. */
+  --font-brand: 'Bahnschrift', 'DIN Alternate', 'Segoe UI Variable Display', 'Segoe UI',
+    system-ui, sans-serif;
 
   /* -- Type scale ---------------------------------------------------------
      Six steps, no half pixels. Everything in the app picks one of these. */
@@ -672,16 +680,40 @@ code {
   min-height: 0;
 }
 
+/* The mark is line art carrying the accent in its own strokes, matching the
+   app icon exactly, so there is no filled chip behind it any more — a solid
+   swatch would read as a different logo from the one in the tray and taskbar. */
+/* Mark and wordmark as one lockup, so the empty space beside the mark reads as
+   deliberate rather than as a gap. */
+.rail-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  margin: 0 0 var(--s3) var(--s2);
+}
+
 .rail-logo {
   display: grid;
   place-items: center;
-  width: 24px;
-  height: 24px;
-  margin: 0 0 var(--s3) var(--s2);
-  border-radius: var(--r-chip);
-  background: var(--brand);
-  color: var(--brand-ink);
-  transition: background var(--dur-2) var(--ease);
+  flex: none;
+  color: var(--brand);
+  transition: color var(--dur-2) var(--ease);
+}
+
+/* Deliberately not accent-coloured: the mark alone carries the state signal,
+   and colouring both turned the top of the rail into a block of green. */
+.rail-wordmark {
+  font-family: var(--font-brand);
+  font-size: var(--fs-lead);
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  /* Tracked-out uppercase leaves a trailing gap after the last letter, which
+     pushes the lockup visibly off-centre against the mark. */
+  margin-right: -0.22em;
+  text-transform: uppercase;
+  line-height: 1;
+  color: var(--text);
+  white-space: nowrap;
 }
 
 .rail-item {

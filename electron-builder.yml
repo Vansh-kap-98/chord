@@ -76,6 +76,10 @@ extraResources:
     filter:
       - tray-*.png
       - icon-*.png
+      # Per-accent multi-size window/taskbar icons. `icon-*.ico` deliberately
+      # does not match `icon.ico`, which electron-builder embeds in the exe
+      # itself and does not need to be duplicated into resources.
+      - icon-*.ico
 
 # Auto-update feed. electron-builder writes a latest.yml manifest beside the
 # installer and uploads both to the GitHub Release; electron-updater in the app
