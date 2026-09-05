@@ -1,6 +1,6 @@
 {
   "name": "chord",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Global mouse & keyboard shortcut engine for Windows",
   "main": "dist-electron/main.js",
   "author": "greni",
